@@ -1,0 +1,19 @@
+# Node
+node_modules/
+.next/
+out/
+build/
+.env*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Data & Index
+faiss_index/
+*.pdf

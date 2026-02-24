@@ -1,3 +1,7 @@
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch==2.5.1
+torchvision==0.20.1
 fastapi
 uvicorn
 python-dotenv
@@ -13,6 +17,3 @@ faiss-cpu
 pypdf
 langchain-text-splitters
 huggingface-hub
---find-links https://download.pytorch.org/whl/cpu
-torch
-torchvision

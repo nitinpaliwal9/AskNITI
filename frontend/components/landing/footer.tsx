@@ -67,7 +67,7 @@ export function Footer() {
             <ul className="space-y-4 text-sm">
               <li className="flex items-start gap-3 group">
                 <Mail size={18} className="text-[#FF9933] shrink-0" />
-                <span className="group-hover:text-white transition-colors cursor-pointer">support@askniti.in</span>
+                <span className="group-hover:text-white transition-colors cursor-pointer">asknitinpaliwal@gmail.com</span>
               </li>
               <li className="bg-white/5 p-4 rounded-xl border border-white/10">
                 <div className="flex items-center gap-2 text-[#FF9933] mb-2">

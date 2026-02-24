@@ -12,3 +12,7 @@ sentence-transformers
 faiss-cpu
 pypdf
 langchain-text-splitters
+huggingface-hub
+--find-links https://download.pytorch.org/whl/cpu
+torch
+torchvision

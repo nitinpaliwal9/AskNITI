@@ -84,7 +84,7 @@ export default function AskNitiChat() {
     
     try {
       // Points to your Localtunnel or Render backend
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+      const backendUrl = "https://askniti-1wcq.onrender.com"
       
       const response = await fetch(`${backendUrl}/chat`, {
         method: "POST",

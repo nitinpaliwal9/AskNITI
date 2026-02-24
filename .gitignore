@@ -14,5 +14,10 @@ venv/
 env/
 .env
 
-# Data & Index
+# Data & Logs
+data/
+ingestion.log
 *.pdf
+
+# Ensure the brain IS pushed
+!faiss_index/

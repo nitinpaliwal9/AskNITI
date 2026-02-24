@@ -1,97 +1,134 @@
 import os
+import gc
 import shutil
-import time
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# --- CONFIGURATION ---
+DATA_PATH = "./data"
+PROCESSED_PATH = "./data/processed"
+INDEX_PATH = "faiss_index"
+LOG_FILE = "ingestion.log"
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', 
+                    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()])
+
+def get_category(filename):
+    """Categorizes documents based on 2026 Sovereign pillars."""
+    fn = filename.lower()
+    mapping = {
+        "agriculture": ["kisan", "agri", "farmer", "fertilizer", "crop", "pranam", "fasal", "dhan"],
+        "housing": ["awas", "housing", "pmay"],
+        "health": ["ayushman", "health", "hospital", "medical", "vay_vandana", "mohfw"],
+        "social_security": ["pension", "bima", "suraksha", "atal", "apy", "pmjjb", "pmsby"],
+        "employment": ["nrega", "rojgar", "mgnrega", "livelihood", "rozgar", "job_card"],
+        "education": ["scholarship", "ugc", "student", "nsp", "school", "education"],
+        "women_empowerment": ["mahila", "beti", "lakhpati", "didi", "shakti", "drone_didi"],
+        "entrepreneurship": ["mudra", "msme", "vishwakarma", "startup", "pmegp", "entrepreneur"],
+        "digital_infra": ["digital", "aadhar", "upi", "dpdp", "bhashini", "it", "ai_stack"],
+        "sanitation_water": ["jal", "jeevan", "swachh", "toilet", "water"],
+        "energy": ["surya", "solar", "bijli", "energy", "hydrogen", "ujjwala"],
+        "food_security": ["ration", "nfsa", "pds", "anna", "garib_kalyan", "food"],
+        "financial_inclusion": ["jandhan", "jmdy", "bank", "credit", "budget", "finance"],
+        "odisha_state": ["odisha", "kalia", "bsky", "nabin", "ama_bank"]
+    }
+    for category, keywords in mapping.items():
+        if any(k in fn for k in keywords):
+            return category
+    return "general"
+
+def clean_text(text):
+    """Production cleaning: removes excessive whitespace and noise."""
+    text = " ".join(text.split())
+    return text
+
+def process_single_file(file):
+    """Worker function for parallel processing."""
+    file_path = os.path.join(DATA_PATH, file)
+    category = get_category(file)
+    try:
+        loader = PyPDFLoader(file_path)
+        pages = loader.load()
+        
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=800,
+            chunk_overlap=150,
+            length_function=len,
+            add_start_index=True
+        )
+        
+        chunks = text_splitter.split_documents(pages)
+        for chunk in chunks:
+            chunk.page_content = clean_text(chunk.page_content)
+            chunk.metadata.update({
+                "category": category,
+                "source_file": file,
+                "page": chunk.metadata.get("page", 0) + 1,
+                "year": "2026"
+            })
+        logging.info(f"✅ Processed: {file} -> [{category.upper()}]")
+        return chunks
+    except Exception as e:
+        logging.error(f"❌ Error processing {file}: {e}")
+        return []
 
 def ingest_government_docs():
-    # 1. Configuration
-    DATA_PATH = "./data"
-    PROCESSED_PATH = "./data/processed"
-    INDEX_PATH = "./faiss_index"
-    
-    # BGE-Small is optimized for "Query-to-Document" matching.
-    model_name = "BAAI/bge-small-en-v1.5"
-    encode_kwargs = {'normalize_embeddings': True} 
-    
+    os.makedirs(DATA_PATH, exist_ok=True)
+    os.makedirs(PROCESSED_PATH, exist_ok=True)
+
     embeddings = HuggingFaceEmbeddings(
-        model_name=model_name,
-        encode_kwargs=encode_kwargs
+        model_name="BAAI/bge-small-en-v1.5",
+        encode_kwargs={'normalize_embeddings': True}
     )
 
-    # 2. Ensure directories exist
-    if not os.path.exists(DATA_PATH):
-        os.makedirs(DATA_PATH)
-    if not os.path.exists(PROCESSED_PATH):
-        os.makedirs(PROCESSED_PATH)
-
-    # 3. Identify NEW PDFs only
     all_files = [f for f in os.listdir(DATA_PATH) if f.endswith('.pdf')]
-    
     if not all_files:
-        print("⚠️ No PDFs found in /data. Move files from /processed back to /data if you want to rebuild.")
+        logging.info("ℹ️ No new PDFs to process.")
         return
 
-    # 4. EXORCISM: Force Delete Old Index (Kill the JanMarg ghost)
-    if os.path.exists(INDEX_PATH):
-        print("🗑️  Cleaning old index to prevent data pollution...")
-        try:
-            shutil.rmtree(INDEX_PATH)
-            time.sleep(1) # Small delay for OS file handles
-        except Exception as e:
-            print(f"⚠️ Warning: Could not delete old index (it might be in use): {e}")
+    # REDUCED BATCH SIZE for stability
+    BATCH_SIZE = 3 
+    vector_store = None
 
-    print(f"📂 Found {len(all_files)} documents. Building fresh Brain...")
+    for i in range(0, len(all_files), BATCH_SIZE):
+        batch_files = all_files[i : i + BATCH_SIZE]
+        
+        logging.info(f"📦 Processing Batch {i//BATCH_SIZE + 1}...")
+        
+        for file in batch_files:
+            chunks = process_single_file(file) # Process files one by one for maximum stability
+            if not chunks: continue
 
-    # 5. Load and Split Documents
-    new_chunks = []
-    for file in all_files:
-        file_path = os.path.join(DATA_PATH, file)
-        try:
-            loader = PyPDFLoader(file_path)
-            pages = loader.load()
+            if vector_store is None:
+                if os.path.exists(INDEX_PATH):
+                    vector_store = FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+                    vector_store.add_documents(chunks)
+                else:
+                    vector_store = FAISS.from_documents(chunks, embeddings)
+            else:
+                logging.info(f"➕ Adding {len(chunks)} chunks from {file}...")
+                vector_store.add_documents(chunks)
             
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200,
-                add_start_index=True,
-            )
-            file_chunks = text_splitter.split_documents(pages)
+            # Save and Clear Memory immediately
+            vector_store.save_local(INDEX_PATH)
+            del chunks
+            gc.collect() # Force Python to clear RAM
+
+        # Move files to processed
+        for file in batch_files:
+            shutil.move(os.path.join(DATA_PATH, file), os.path.join(PROCESSED_PATH, file))
             
-            # Clean text to improve 'Ration Card' retrieval
-            for chunk in file_chunks:
-                chunk.page_content = chunk.page_content.replace('\n', ' ').strip()
-                
-            new_chunks.extend(file_chunks)
-            print(f"✅ Processed: {file} ({len(pages)} pages)")
-        except Exception as e:
-            print(f"❌ Error processing {file}: {e}")
+        logging.info(f"💾 Batch {i//BATCH_SIZE + 1} finalized and saved.")
 
-    if not new_chunks:
-        print("❌ No valid text extracted. Brain update aborted.")
-        return
-
-    # 6. Create the Vector Store from scratch
-    print(f"🧠 Indexing {len(new_chunks)} chunks into FAISS...")
-    vector_store = FAISS.from_documents(new_chunks, embeddings)
-
-    # 7. Save the updated index
-    vector_store.save_local(INDEX_PATH)
+    logging.info("🚀 Sovereign Brain Rebuilt Successfully!")
     
-    # 8. Move files to 'processed' folder
-    for file in all_files:
-        src = os.path.join(DATA_PATH, file)
-        dest = os.path.join(PROCESSED_PATH, file)
-        # Handle cases where file already exists in processed
-        if os.path.exists(dest):
-            os.remove(dest)
-        shutil.move(src, dest)
-
-    print(f"\n💾 Success! AskNITI's brain is now CLEAN and REBUILT.")
-    print(f"📍 Location: {INDEX_PATH}")
-    print(f"🚚 Documents archived to: {PROCESSED_PATH}")
-
 if __name__ == "__main__":
     ingest_government_docs()

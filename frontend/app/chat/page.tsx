@@ -1,10 +1,9 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import Link from "next/link"
-import Image from "next/image"
-import { ShieldCheck, Info, Loader2 } from "lucide-react"
+import { Info, Loader2 } from "lucide-react"
 import { ChatInput } from "@/components/chat/chat-input"
+import { ChatHeader } from "@/components/chat/chat-header"
 import {
   MessageBubble,
   TypingIndicator,
@@ -54,7 +53,7 @@ export default function AskNitiChat() {
     if (isTyping) {
       interval = setInterval(() => {
         setProgress((prev) => {
-          if (prev < 90) return prev + 2; // Slower, more realistic progress
+          if (prev < 90) return prev + 2; 
           return prev;
         });
       }, 150);
@@ -76,14 +75,13 @@ export default function AskNitiChat() {
     setIsTyping(true)
     setProgress(10)
     
-    // Force scroll to bottom immediately after user sends
+    // Immediate scroll on send
     setTimeout(() => scrollToBottom(true), 100)
 
     const aiMessageId = `ai-${Date.now()}`
     let accumulatedContent = ""
     
     try {
-      // Points to your Localtunnel or Render backend
       const backendUrl = "https://askniti-1wcq.onrender.com"
       
       const response = await fetch(`${backendUrl}/chat`, {
@@ -104,7 +102,6 @@ export default function AskNitiChat() {
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-        // Split by "data: " to handle multiple events in one chunk
         const parts = chunk.split("data: ");
 
         for (const part of parts) {
@@ -120,7 +117,7 @@ export default function AskNitiChat() {
               );
             } 
             else if (data.type === "text") {
-              setIsTyping(false); // Stop showing the skeleton
+              setIsTyping(false); 
               setProgress(100);
               accumulatedContent += data.content;
 
@@ -133,10 +130,11 @@ export default function AskNitiChat() {
                   msg.id === aiMessageId ? { ...msg, content: accumulatedContent } : msg
                 );
               });
+              // Keep scrolling as text streams in
+              scrollToBottom();
             }
           } catch (e) {
-            // This ignores incomplete JSON chunks until the next part arrives
-            console.log("Partial chunk received...");
+            // Silence partial JSON errors during streaming
           }
         }
       }
@@ -146,7 +144,9 @@ export default function AskNitiChat() {
       const errorMessage: Message = {
         id: `err-${Date.now()}`,
         role: "assistant",
-        content: "I'm having trouble connecting to the NITI servers. Please check if the backend is running.",
+        content: language === "hi" 
+          ? "क्षमा करें, सर्वर से जुड़ने में समस्या हो रही है। कृपया पुनः प्रयास करें।" 
+          : "I'm having trouble connecting to the NITI servers. Please check your connection and try again.",
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])
@@ -166,7 +166,7 @@ export default function AskNitiChat() {
     <div className="flex h-dvh flex-col bg-[#fcfcfc] overflow-hidden">
       
       {/* 1. Tricolor Progress Bar */}
-      <div className="fixed top-0 left-0 w-full h-1.5 z-[100] flex">
+      <div className="fixed top-0 left-0 w-full h-1 z-[110] flex">
         {isTyping || progress > 0 ? (
             <div 
               className="h-full bg-gradient-to-r from-[#FF9933] via-[#0A192F] to-[#138808] transition-all duration-500 ease-out"
@@ -181,53 +181,20 @@ export default function AskNitiChat() {
         )}
       </div>
 
-      {/* 2. Chat Header */}
-      <header className="px-6 py-3 border-b border-slate-200 bg-white/80 backdrop-blur-md flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="hover:opacity-80 transition-opacity">
-            <div className="relative h-10 w-10 overflow-hidden rounded-lg shadow-sm border border-slate-100 bg-white">
-                <Image src="/askniti-logo.png" alt="AskNITI Logo" fill priority className="object-cover" />
-            </div>
-          </Link>
-          <div className="flex flex-col">
-            <h1 className="text-lg font-black text-[#0A192F] leading-none tracking-tight">
-              Ask<span className="text-[#FF9933]">NITI</span> AI
-            </h1>
-            <div className="flex items-center gap-1 mt-0.5">
-              <ShieldCheck className="size-3 text-[#138808]" />
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
-                Policy Document Intelligence
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="hidden md:flex items-center gap-4">
-          {isTyping && (
-             <div className="flex items-center gap-2 animate-pulse">
-                <Loader2 className="size-3 animate-spin text-[#FF9933]" />
-                <span className="text-[10px] font-black text-[#0A192F]/40 uppercase tracking-widest">
-                  {progress < 50 ? "Searching Archives" : "Analyzing Data"}
-                </span>
-             </div>
-          )}
-          <div className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-            v1.0-2026
-          </div>
-        </div>
-      </header>
+      {/* 2. Unified Chat Header */}
+      <ChatHeader language={language} onLanguageChange={setLanguage} />
 
       {/* 3. Messages Container */}
       <main 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto bg-white/50"
+        className="flex-1 overflow-y-auto bg-white/50 scroll-smooth pb-10"
       >
-        <div className="mx-auto max-w-4xl px-4 py-8">
+        <div className="mx-auto max-w-4xl px-4 py-6 md:py-10">
           {messages.length === 0 ? (
             <WelcomeScreen language={language} />
           ) : (
-            <div className="flex flex-col gap-8 pb-32">
+            <div className="flex flex-col gap-8">
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}
@@ -238,6 +205,14 @@ export default function AskNitiChat() {
 
               {isTyping && (
                 <div className="flex flex-col gap-6">
+                   <div className="flex items-center gap-2 px-4 mb-2 animate-pulse">
+                      <Loader2 className="size-3 animate-spin text-[#FF9933]" />
+                      <span className="text-[10px] font-black text-[#0A192F]/40 uppercase tracking-widest">
+                        {progress < 50 
+                          ? (language === "hi" ? "आर्काइव्स खोज रहे हैं" : "Searching Archives") 
+                          : (language === "hi" ? "डेटा विश्लेषण" : "Analyzing Data")}
+                      </span>
+                   </div>
                   {progress < 40 ? (
                     <div className="flex justify-start">
                       <TypingIndicator />
@@ -250,21 +225,28 @@ export default function AskNitiChat() {
                 </div>
               )}
               
-              <div ref={chatEndRef} className="h-4" />
+              <div ref={chatEndRef} className="h-20 md:h-24" />
             </div>
           )}
         </div>
       </main>
 
       {/* 4. Input Area */}
-      <footer className="shrink-0 w-full bg-gradient-to-t from-white via-white to-transparent pt-10 pb-6 relative z-10">
+      <footer className="shrink-0 w-full bg-gradient-to-t from-white via-white/95 to-transparent pt-8 pb-6 relative z-10">
         <div className="max-w-4xl mx-auto px-4">
-          <ChatInput onSend={handleSend} disabled={isTyping} language={language} />
-          <div className="flex items-center justify-center gap-2 mt-4 opacity-60 text-slate-400">
-            <Info className="size-3" />
-            <p className="text-[9px] font-medium uppercase tracking-widest">
-              Independent AI Research Tool • Check official sources for verification
-            </p>
+          <ChatInput 
+            onSend={handleSend} 
+            disabled={isTyping} 
+            language={language} 
+            showQuickActions={messages.length === 0} 
+          />
+          <div className="flex items-center justify-center gap-2 mt-5 opacity-60 text-slate-400">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-100 bg-white/50 shadow-sm">
+              <Info className="size-3 text-[#FF9933]" />
+              <p className="text-[9px] font-black uppercase tracking-widest text-center">
+                Independent AI Research Tool • v1.0.2
+              </p>
+            </div>
           </div>
         </div>
       </footer>

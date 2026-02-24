@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Sans } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { Navbar } from '@/components/navbar' // Ensure this path is correct
+import { Navbar } from '@/components/navbar' // Path remains correct
 import './globals.css'
 
 const dmSans = DM_Sans({
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
         type: 'image/png',
       },
     ],
-    apple: '/askniti-logo.png', // Updated to your new brand asset
+    apple: '/askniti-logo.png',
   },
 }
 
@@ -32,7 +32,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false,
+  userScalable: false, // Prevents accidental zooming on mobile inputs
 }
 
 export default function RootLayout({
@@ -43,7 +43,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth">
       <body className={`${dmSans.variable} font-sans antialiased bg-[#fcfcfc]`}>
-        {/* Common Navbar for all pages */}
+        {/* The Navbar component now contains logic to hide itself 
+            automatically when on the /chat route, preventing 
+            the "doubling" issue while remaining global for all other pages.
+        */}
         <Navbar />
         
         {/* Page Content */}

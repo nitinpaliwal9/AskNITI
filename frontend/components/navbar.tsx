@@ -1,9 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Menu, Globe, ChevronDown, Rocket, BookOpen } from "lucide-react"
+import { Menu, Globe, ChevronDown, Rocket, BookOpen, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { 
   DropdownMenu, 
@@ -11,11 +12,22 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
+// Import Sheet components for the mobile menu functionality
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetTrigger, 
+  SheetHeader, 
+  SheetTitle 
+} from "@/components/ui/sheet"
 
 export function Navbar() {
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
 
-  // Helper to determine if a link is active
+  // CRITICAL FIX: Prevent Navbar doubling by hiding the global navbar on the chat page
+  if (pathname === "/chat") return null;
+
   const isActive = (path: string) => pathname === path;
 
   return (
@@ -54,7 +66,6 @@ export function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             <div className="flex items-center gap-6">
-              {/* Library Link - New */}
               <Link 
                 href="/library" 
                 className={`text-sm font-bold transition-colors relative group ${
@@ -68,7 +79,6 @@ export function Navbar() {
                 <span className={`absolute -bottom-1 left-0 h-0.5 bg-[#FF9933] transition-all ${isActive('/library') ? 'w-full' : 'w-0 group-hover:w-full'}`} />
               </Link>
 
-              {/* Scroll Anchors */}
               {["Features", "About", "FAQ"].map((item) => (
                 <Link 
                   key={item} 
@@ -83,7 +93,6 @@ export function Navbar() {
 
             <div className="h-6 w-[1px] bg-slate-200 mx-2" />
 
-            {/* Language Switcher */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2 font-bold text-[#0A192F] h-9 hover:bg-slate-100">
@@ -100,7 +109,6 @@ export function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Main CTA - Launch AI */}
             <Button asChild className="bg-[#0A192F] hover:bg-[#112240] text-white rounded-xl px-8 font-bold shadow-lg shadow-blue-900/10 border-b-4 border-black active:border-b-0 active:translate-y-[2px] transition-all">
               <Link href="/chat">
                 <Rocket className="mr-2 size-4 text-[#FF9933]" />
@@ -109,10 +117,57 @@ export function Navbar() {
             </Button>
           </div>
 
-          {/* Mobile Menu Button */}
-          <Button variant="ghost" size="icon" className="md:hidden text-[#0A192F]">
-            <Menu className="size-6" />
-          </Button>
+          {/* MOBILE NAVIGATION - FIXED HAMBURGER */}
+          <div className="md:hidden">
+            <Sheet open={isOpen} onOpenChange={setIsOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-[#0A192F]">
+                  <Menu className="size-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[300px] bg-white border-l border-slate-200 p-0">
+                <SheetHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
+                  <SheetTitle className="flex items-center gap-3">
+                    <div className="relative h-8 w-8 overflow-hidden rounded-lg">
+                       <Image src="/askniti-logo.png" alt="Logo" fill className="object-cover" />
+                    </div>
+                    <span className="text-xl font-black text-[#0A192F]">
+                      Ask<span className="text-[#FF9933]">NITI</span>
+                    </span>
+                  </SheetTitle>
+                </SheetHeader>
+                
+                <div className="flex flex-col gap-2 p-6">
+                  <Link 
+                    href="/library" 
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 text-lg font-bold py-3 text-slate-600 border-b border-slate-50"
+                  >
+                    <BookOpen size={20} /> Library
+                  </Link>
+                  {["Features", "About", "FAQ"].map((item) => (
+                    <Link
+                      key={item}
+                      href={`/#${item.toLowerCase()}`}
+                      onClick={() => setIsOpen(false)}
+                      className="text-lg font-bold py-3 text-slate-600 border-b border-slate-50"
+                    >
+                      {item}
+                    </Link>
+                  ))}
+                  
+                  <div className="mt-6">
+                    <Button asChild className="w-full bg-[#0A192F] text-white rounded-xl font-bold py-6 shadow-lg">
+                      <Link href="/chat" onClick={() => setIsOpen(false)}>
+                        <Rocket className="mr-2 size-5 text-[#FF9933]" />
+                        Puchiye AI Se
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </div>
     </nav>

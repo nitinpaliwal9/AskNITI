@@ -100,35 +100,28 @@ export default function AskNitiChat() {
       if (!reader) return
 
       while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n\n")
+        const chunk = decoder.decode(value, { stream: true });
+        // Split by "data: " to handle multiple events in one chunk
+        const parts = chunk.split("data: ");
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue
-          
+        for (const part of parts) {
+          const trimmedPart = part.trim();
+          if (!trimmedPart) continue;
+
           try {
-            const data = JSON.parse(line.replace("data: ", ""))
+            const data = JSON.parse(trimmedPart);
 
-            // Update UI state based on stream type
             if (data.type === "sources") {
-              setMessages((prev) => {
-                const existing = prev.find(m => m.id === aiMessageId);
-                if (!existing) {
-                  return [...prev, { id: aiMessageId, role: "assistant", content: "", timestamp: new Date(), sources: data.content }];
-                }
-                return prev.map((msg) => msg.id === aiMessageId ? { ...msg, sources: data.content } : msg);
-              });
+              setMessages((prev) => 
+                prev.map((msg) => msg.id === aiMessageId ? { ...msg, sources: data.content } : msg)
+              );
             } 
             else if (data.type === "text") {
-              // Once text starts flowing, hide the "thinking" skeletons
-              if (isTyping) {
-                setIsTyping(false); 
-                setProgress(100);
-              }
-
+              setIsTyping(false); // Stop showing the skeleton
+              setProgress(100);
               accumulatedContent += data.content;
 
               setMessages((prev) => {
@@ -142,10 +135,12 @@ export default function AskNitiChat() {
               });
             }
           } catch (e) {
-            console.error("Error parsing stream chunk", e)
+            // This ignores incomplete JSON chunks until the next part arrives
+            console.log("Partial chunk received...");
           }
         }
       }
+      
     } catch (error) {
       console.error("Chat Error:", error)
       const errorMessage: Message = {
